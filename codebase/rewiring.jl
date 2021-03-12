@@ -94,7 +94,7 @@ function rewireOutDegree(AInit, o, xCutHead, nodeX, pRandRewire)
             println("The A nodes disconnected are $xCutHead and $nodeX")
         end
     
-        A[xWireNonHead, nodeX] = A[xCutHead, nodeX]
+        A[xWireNonHead, nodeX] = o
         A[xCutHead, nodeX] = 0 
   
     return A    
