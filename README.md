@@ -11,7 +11,7 @@
 ```sh
    git clone https://github.com/gselendal/adaptiveRewiring
    ```
-2. Install packages with Julia's built-in pkg manager before running the code. 
+2. Install packages with Julia's built-in pkg manager before running the notebooks. 
 ```sh
    using Pkg
    Pkg.add("package_name")
