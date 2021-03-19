@@ -2,103 +2,10 @@ module rewiring
 
 include("./utils.jl")
 
-export getNodesReceivingAndSendingEdges, pickNodeWithInOutEdges, computeAdvectionKernel, computeConsensusKernel, runDynamicsAdvectionConsensus, runDynamicsAdvectionConsensusParallel, runDynamicsAdvectionConsensusSeq, runDynamicsAdvectionConsensusWithRandRewire, runInAndOutDynamics, runInDynamicsMLP,runOutDynamics, computeKernel, computeKernel_reverse, pruneInDegrees, pruneOutDegrees, rewireOutDegree
+export getNodesReceivingAndSendingEdges, pickNodeWithInOutEdges, computeAdvectionKernel, computeConsensusKernel, computeKernel, computeKernel_reverse,runDynamics, runInDynamics, runOutDynamics, pruneInDegree, pruneOutDegree, rewireOutDegree, pruneInAndOutDegree, rewireInAndOutDegree
 using LinearAlgebra, .utils, Random
 
-function pruneOutDegrees(AInit, pRandPrune, tau)
-    A = copy(AInit)
-    numNodes = size(A, 1)
-    
-        notX, nodeX = pickNodeWithInOutEdges(A, tau, pRandPrune)
-        
-        # calculate the consensus or advection kernel
-        if pRandPrune <= rand()
-            # get node x's coldest head (excluding "x")
-            xHeads = findall(x -> x != 0, A[:, nodeX])
-            xCutHead = xHeads[argmin(A[xHeads, nodeX])]
-        else # else we randomly rewire    
-            xHeads = findall(x -> x != 0, A[:, nodeX])
-            ind = rand(1:length(xHeads))
-            xCutHead = xHeads[ind]
-        end
-        
-        o = A[xCutHead, nodeX]
-        A[xCutHead, nodeX] = 0 
 
-  
-    return A, o, xCutHead, nodeX
-end
-
-function pruneInDegrees(AInit, pRandPrune, tau)
-        """
-    Prunes iteratively a matrix A. At each iteration the pruning can be done selectively, lowest connection is pruned, (probability = 1 - pRandPrune) or 
-    randomly (probability = pRandPrune). 
-
-    Args:
-        AInit:
-            initial adjacency matrix
-    Returns:
-        A:
-            
-    """
-    A = copy(AInit)
-    numNodes = size(A, 1)
-    
-        
-    notX, nodeX = pickNodeWithInOutEdges(A, tau, pRandPrune)
-                
-    # calculate the consensus or advection kernel
-    if pRandPrune <= rand()
-        #println("1")
-        # get node x's coldest tail (excluding "x")
-        xTails = findall(x -> x != 0, A[nodeX, :])
-        xCutTail = xTails[argmin(A[nodeX, xTails])]
-    else # else we randomly prune    
-        #println("2")
-        xTails = findall(x -> x != 0, A[nodeX, :])
-        ind = rand(1:length(xTails))
-        xCutTail = xTails[ind]
-    end
-            
-    A[nodeX, xCutTail] = 0 
-    
-    
-    return A, xCutTail, nodeX 
-end
-
-function rewireOutDegree(AInit, o, xCutHead, nodeX, pRandRewire)
-        A = copy(AInit)
-        numNodes = size(A, 1)
-
-        # keep a record of the other nodes
-        indAll = collect(1:numNodes)
-        notX = filter(x -> !(x in nodeX) && !(x == xCutHead), indAll)
-
-        
-        # find the nodes with no incomings from "x"
-        xNonHeadBool = 1 .* Bool.(A[notX, nodeX] .== 0) 
-        
-        # calculate the consensus or advection kernel
-        if pRandRewire <= rand()
-            xNonHeads = notX[findall(x -> x != 0, xNonHeadBool)]
-            xWireNonHead = xNonHeads[argmax(A[xNonHeads, nodeX])]
-        else # else we randomly rewire    
-            xNonHeadBoolNonzero = findall(x -> x != 0, xNonHeadBool)
-            ind = rand(1:length(xNonHeadBoolNonzero))
-            xWireNonHead = notX[xNonHeadBoolNonzero[ind]]
-        end
-        
-        if xCutHead == xWireNonHead
-            println("PROBLEM")
-            println("The A nodes rewired are $xWireNonHead and $nodeX with weight $A[xCutHead, nodeX]")
-            println("The A nodes disconnected are $xCutHead and $nodeX")
-        end
-    
-        A[xWireNonHead, nodeX] = o
-        A[xCutHead, nodeX] = 0 
-  
-    return A    
-end
 
 function getNodesReceivingAndSendingEdges(A)
      """
@@ -175,8 +82,6 @@ function computeKernel(w, layer_dims)
     
     row = 1 
     col = layer_dims[1]+1
-    
-    
     
     A = Array{Float64, 2}(undef,N, N)
     A -= A
@@ -261,59 +166,89 @@ function computeAdvectionKernel(A, tau)
 end
 
 
-function runOutDynamics(AInit, pRandRewire, numRewirings, tau, flagAlg)
-        """
-    Rewires iteratively a matrix A. At each iteration the rewiring can be random (probability = p_rnd_rewire) or according to a consensus or advection function (probability = 1-p_rnd_rewire). 
-    
-    It rewires only the OUTDEGREES. More specifically, during each rewiring iteration a random node k is selected and one of its outdegrees is cut, and a connection is added with the tail being k. It operates in the columns Works for both binary and weighted initial networks since this implementation just redistributes the weights
-    
-    Args:
-        AInit:
-            initial adjacency matrix
-        pRandRewire:
-            probability of random rewiring
-        numRewirings:
-            number of rewiring iterations
-        tau:
-            heat dispersion parameter
-        flagAlg:
-            'consensus' or 'advection' depending on which Laplacian you use for the kernel; Lin or Lout
-    Returns:
-        A:
-            returns a rewired matrix
-    """
-    
+
+function pruneInAndOutDegree()
+    println("..")
+end 
+
+function rewireInAndOutDegree()
+    println("..")
+end
+
+function pruneOutDegree(AInit, pRandPrune, tau)
     A = copy(AInit)
     numNodes = size(A, 1)
+    notX, nodeX = pickNodeWithInOutEdges(A, tau, pRandPrune)
     
-    for i=1:numRewirings
-        println("Iteration is $i")
-        
-        notX, nodeX = pickNodeWithInOutEdges(A, tau, pRandRewire)
-        
-        # find the nodes with no incomings from "x"
-        
-        xNonHeadBool = 1 .* Bool.(A[notX, nodeX] .== 0) 
-        
-        # calculate the consensus or advection kernel
-        if pRandRewire <= rand()
-            if flagAlg == "consensus"
-                kernel = computeConsensusKernel(A,tau)
-            elseif flagAlg == "advection"
-                kernel = computeAdvectionKernel(A, tau)
-            end
-            
+        if pRandPrune <= rand()
             # get node x's coldest head (excluding "x")
             xHeads = findall(x -> x != 0, A[:, nodeX])
-            xCutHead = xHeads[argmin(kernel[xHeads, nodeX])]
-            
-            xNonHeads = notX[findall(x -> x != 0, xNonHeadBool)]
-            xWireNonHead = xNonHeads[argmax(kernel[xNonHeads, nodeX])]
+            xCutHead = xHeads[argmin(A[xHeads, nodeX])]
         else # else we randomly rewire    
             xHeads = findall(x -> x != 0, A[:, nodeX])
             ind = rand(1:length(xHeads))
             xCutHead = xHeads[ind]
+        end
+        
+        o = A[xCutHead, nodeX]
+        A[xCutHead, nodeX] = 0 
+
+  
+    return A, o, xCutHead, nodeX
+end
+
+function pruneInDegree(AInit, pRandPrune, tau)
+        """
+    Prunes iteratively a matrix A. At each iteration the pruning can be done selectively, lowest connection is pruned, (probability = 1 - pRandPrune) or 
+    randomly (probability = pRandPrune). 
+
+    Args:
+        AInit:
+            initial adjacency matrix
+    Returns:
+        A:
             
+    """
+    A = copy(AInit)
+    numNodes = size(A, 1)
+    
+        
+    notX, nodeX = pickNodeWithInOutEdges(A, tau, pRandPrune)
+                
+    if pRandPrune <= rand()
+        #println("1")
+        # get node x's coldest tail (excluding "x")
+        xTails = findall(x -> x != 0, A[nodeX, :])
+        xCutTail = xTails[argmin(A[nodeX, xTails])]
+    else # else we randomly prune    
+        #println("2")
+        xTails = findall(x -> x != 0, A[nodeX, :])
+        ind = rand(1:length(xTails))
+        xCutTail = xTails[ind]
+    end
+    
+    o = A[nodeX, xCutTail]
+    A[nodeX, xCutTail] = 0 
+    
+    
+    return A, o, xCutTail, nodeX 
+end
+
+function rewireOutDegree(AInit, o, xCutHead, nodeX, pRandRewire)
+        A = copy(AInit)
+        numNodes = size(A, 1)
+
+        # keep a record of the other nodes
+        indAll = collect(1:numNodes)
+        notX = filter(x -> !(x in nodeX) && !(x == xCutHead), indAll)
+
+        # find the nodes with no incomings from "x"
+        xNonHeadBool = 1 .* Bool.(A[notX, nodeX] .== 0) 
+        
+        if pRandRewire <= rand()
+            xNonHeads = notX[findall(x -> x != 0, xNonHeadBool)]
+            xWireNonHead = xNonHeads[argmax(A[xNonHeads, nodeX])]
+        else # else we randomly rewire    
             xNonHeadBoolNonzero = findall(x -> x != 0, xNonHeadBool)
             ind = rand(1:length(xNonHeadBoolNonzero))
             xWireNonHead = notX[xNonHeadBoolNonzero[ind]]
@@ -324,67 +259,31 @@ function runOutDynamics(AInit, pRandRewire, numRewirings, tau, flagAlg)
             println("The A nodes rewired are $xWireNonHead and $nodeX with weight $A[xCutHead, nodeX]")
             println("The A nodes disconnected are $xCutHead and $nodeX")
         end
-          
-        A[xWireNonHead, nodeX] = A[xCutHead, nodeX]
-        A[xCutHead, nodeX] = 0 
-    end
+    
+        A[xWireNonHead, nodeX] = o
   
-    return A     
+    return A    
 end
 
-function runInDynamicsMLP(AInit, pRandRewire, tau, flagAlg)
-    """
-    Rewires iteratively a matrix A. At each iteration the rewiring can be random
-    (probability = pRandRewire) or according to a consensus/advection function (probability = 1-pRandRewire).
-    It rewires only the INDEGREES. More specifically, during each rewiring iteration a random node k is selected
-    and one of its tails is cut, and a connection is added with the head being k. It operates in the rows
-    Args:
-        AInit:
-            initial adjacency matrix
-        pRandRewire:
-            probability of random rewiring
-        n_rewirings:
-            number of iterations the wiring take place
-        numRewirings:
-            heat dispersion parameter
-        flagAAlg:
-            'consensus' or 'advection' depending on which Laplacian you use for the kernel; Lin or Lout
-    Returns:
-        A:
-            returns a rewired  matrix
-    """
-
+function rewireInDegree(AInit, o, xCutTail, nodeX, pRandRewire)
+       
     A = copy(AInit)
     numNodes = size(A, 1)
     
         
-    notX, nodeX = pickNodeWithInOutEdges(A, tau, pRandRewire)
-        
+    # keep a record of the other nodes
+    indAll = collect(1:numNodes)
+    notX = filter(x -> !(x in nodeX) && !(x == xCutTail), indAll)
+
     # find the nodes with no incomings from "x"
         
     xNonTailBool = 1 .* Bool.(A[nodeX, notX] .== 0) 
         
-    # calculate the consensus or advection kernel
     if pRandRewire <= rand()
-        if flagAlg == "consensus"
-            kernel = computeConsensusKernel(A,tau)
-        elseif flagAlg == "advection"
-            kernel = computeAdvectionKernel(A, tau)
-        end
-            
-        # get node x's coldest tail (excluding "x")
-        xTails = findall(x -> x != 0, A[nodeX, :])
-        xCutTail = xTails[argmin(kernel[nodeX, xTails])]
-            
         # get node x's hottest non-tail (excluding "x")
         xNonTails = notX[findall(x -> x != 0, xNonTailBool)]
-        xWireNonTail = xNonTails[argmax(kernel[nodeX, xNonTails])]
-            
+        xWireNonTail = xNonTails[argmax(A[nodeX, xNonTails])]            
     else # else we randomly rewire    
-        xTails = findall(x -> x != 0, A[nodeX, :])
-        ind = rand(1:length(xTails))
-        xCutTail = xTails[ind]
-            
         xNonTailBoolNonzero = findall(x -> x != 0, xNonTailBool)
         ind = rand(1:length(xNonTailBoolNonzero))
         xWireNonTail = notX[xNonTailBoolNonzero[ind]]
@@ -395,370 +294,69 @@ function runInDynamicsMLP(AInit, pRandRewire, tau, flagAlg)
         println("The A nodes rewired are $xWireNonTail and $nodeX with weight $A[nodeX, xCutTail]")
         println("The A nodes disconnected are $xCutTail and $nodeX")
     end
-        
-    A[nodeX, xWireNonTail] = A[nodeX, xCutTail]
-    A[nodeX, xCutTail] = 0 
     
+    A[xWireNonTail, nodeX] = o
+
     
-    return A 
+    return A
 end
 
-function runInAndOutDynamics(AInit, pRandRewire, numRewirings, tau, flagAlg)
-    """
-    Rewires iteratively a matrix A. At each iteration the rewiring can be random
-    (probability= pRandRewire) or according to a consensus/advection function (probability = 1-pRandRewire).
-    It rewires both the OUTDEGREES and INDEGREES
-    Args:
-        AInit:
-            initial adjacency matrix
-        pRandRewire:
-            probability of random rewiring
-        numRewirings:
-            number of iterations the wiring take place
-        tau:
-            heat dispersion parameter
-         flagAlg:
-            'consensus' or 'advection' depending on which Laplacian you use for the kernel; Lin or Lout
-    Returns:
-        A:
-            returns a rewired  matrix
-    """
-    
+function runInDynamics(AInit, pRandRewire, tau)
+end
+
+function runOutDynamics(AInit, pRandRewire, tau)
     A = copy(AInit)
-    numNodes = size(A, 1)
-    
-    for i=1:numRewirings
-        println("Iteration is $i")
-        
+        numNodes = size(A, 1)
+
         notX, nodeX = pickNodeWithInOutEdges(A, tau, pRandRewire)
-            
-                
-        # Identify nodes that do not send an edge to "x
-        xNonTailBool = 1.0 .* .!Bool.(A[nodeX, notX])
-        
+
         # find the nodes with no incomings from "x"
-        xNonHeadBool = 1.0 .* .!Bool.(A[notX, nodeX])
+        xNonHeadBool = 1 .* Bool.(A[notX, nodeX] .== 0) 
         
-        
-        # calculate the consensus or advection kernel
         if pRandRewire <= rand()
-            if flagAlg == "consensus"
-                kernel = computeConsensusKernel(A,tau)
-            elseif flagAlg == "advection"
-                kernel = computeAdvectionKernel(A, tau)
-            end
-            
-            # ====== REWIRING FOR THE INCOMING EDGES OF THE NODE X ====
-            # get node x's coldest tail (excluding "x")
-            xTails = utils.nonzero(A[nodeX, :])[1]
-            xCutTail = xTails[argmin(kernel[nodeX, xTails])]
-            
-            # get node x's hottest non-tail (excluding "x")
-            xNonTails = notX[utils.nonzero(xNonTailBool)[1]]
-            xWireNonTail = xNonTails[argmax(kernel[nodeX, xNonTails])]
-            
-            # ====== REWIRING FOR THE OUTGOING EDGES OF THE NODE X ====
-            
-            # get node x's coldest head (excluding "x")
-            xHeads = utils.nonzero(A[:, nodeX])[1]
-            xCutHead = xHeads[argmin(kernel[xHeads, nodeX])]
-            
-            xNonHeads = notX[utils.nonzero(xNonHeadBool)[1]]
-            xWireNonHead = xNonHeads[argmax(kernel[xNonHeads, nodeX])]
+            xHeads = findall(x -> x != 0, A[:, nodeX])
+            xCutHead = xHeads[argmin(A[xHeads, nodeX])]
+
+            xNonHeads = notX[findall(x -> x != 0, xNonHeadBool)]
+            xWireNonHead = xNonHeads[argmax(A[xNonHeads, nodeX])]
         else # else we randomly rewire    
-            
-            ####################################
-            # randomly pick one of x's tails (excluding "x")
-            xTails = utils.nonzero(A[nodeX, :])[1]
-            xCutTail = rand(1:xTails)
-            
-            # randomly pick one of x's non-tails (excluding "x")
-            xWireNonTail = notX[rand(utils.nonzero(xNonTailBool)[1])]
-            
-            ##################################
-            # randomly pick one of x's head (excluding "x")
-            xHeads = utils.nonzero(A[:, nodeX])[1]
-            xCutHead = rand(1:xHeads)
-        
-            xWireNonHead = notX[rand(utils.nonzero(xNonHeadBool)[1])]
-            
-        end
-        
-        if xCutTail == xWireNonTail || xCutHead == xWireNonHead
-            println("PROBLEM")
-        end
-        
-        A[nodeX, xWireNonTail] = A[nodeX, xCutTail]
-        A[xWireNonHead, nodeX] = A[xCutHead, nodeX]
-    
+            xHeads = findall(x -> x != 0, A[:, nodeX])
+            ind = rand(1:length(xHeads))
+            xCutHead = xHeads[ind]
 
-        A[nodeX, xCutTail] = 0 
+            xNonHeadBoolNonzero = findall(x -> x != 0, xNonHeadBool)
+            ind = rand(1:length(xNonHeadBoolNonzero))
+            xWireNonHead = notX[xNonHeadBoolNonzero[ind]]
+        end
+        
+        if xCutHead == xWireNonHead
+            println("PROBLEM")
+            println("The A nodes rewired are $xWireNonHead and $nodeX with weight $A[xCutHead, nodeX]")
+            println("The A nodes disconnected are $xCutHead and $nodeX")
+        end
+
+        A[xWireNonHead, nodeX] = A[xCutHead, nodeX]
         A[xCutHead, nodeX] = 0 
-    end
+    return A  
+end
+
+function runDynamics(A, p, tau, direction)
     
+    if direction == "outdegree"
+        A, o, xCutHead, nodeX = pruneOutDegree(A, p, tau)
+        A = rewireOutDegree(A, o, xCutHead, nodeX, p)
+        
+    elseif direction == "indegree"
+        A, o, xCutTail, nodeX = pruneInDegree(A, p, tau)
+        A = rewireInDegree(A, o, xCutTail, nodeX, p)
+    else 
+        A, o1, xCutHead, node1 = pruneOutDegree(A, p, tau)
+        A, o2, xCutTail, node2 = pruneInDegree(A, p, tau)
+
+        A = rewireOutDegree(A, o1, xCutHead, node1, p)
+        A = rewireInDegree(A, o2, xCutTail, node2, p)
+    end
     
     return A 
 end
-
-# either run advection or consensus at each iteration
-function runDynamicsAdvectionConsensusSeq(AInit, numRewirings)      
-    
-    A = copy(AInit)
-    numNodes = size(A, 1)
-    pRandRewire = 0 
-    
-    for i=1:numRewirings
-        notX, nodeX = pickNodeWithInOutEdges(A, tau, pRandRewire)
-        
-        # Identify nodes that do not send an edge to "x
-        xNonTailBool = 1.0 .* .!Bool.(A[nodeX, notX])
-        
-        # find the nodes with no incomings from "x"
-        xNonHeadBool = 1.0 .* .!Bool.(A[notX, nodeX])
-        
-        if i % 2 == 0
-            println("Even iteration, we do consensus")
-            
-            # ====== REWIRING FOR THE in-DEGREE OF THE NODE X ====
-
-            kernel = computeConsensusKernel(A,tau)
-            
-            # get node x's coldest tail (excluding "x")
-            xTails = utils.nonzero(A[nodeX, :])[1]
-            xCutTail = xTails[argmin(kernel[nodeX, xTails])]
-            
-            # get node x's hottest non-tail (excluding "x")
-            xNonTails = notX[utils.nonzero(xNonTailBool)[1]]
-            xWireNonTail = xNonTails[argmax(kernel[nodeX, xNonTails])]
-            
-            
-            # cut and rewire in-going connections from node x
-            A[nodeX, xWireNonTail] = A[nodeX, xCutTail]
-            A[nodeX, xCutTail] = 0 
-        else 
-            println("Odd iteration, we do advection")
-            
-            # ====== REWIRING FOR THE OUT-DEGREE OF NODE X =====
-            
-            kernel = computeAdvectionKernel(A, tau)
-            
-            
-            # get node x's coldest head (excluding "x")
-            xHeads = utils.nonzero(A[:, nodeX])[1]
-            xCutHead = xHeads[argmin(kernel[xHeads, nodeX])]
-            
-            xNonHeads = notX[utils.nonzero(xNonHeadBool)[1]]
-            xWireNonHead = xNonHeads[argmax(kernel[xNonHeads, nodeX])]
-            
-            # cut and rewire out-going connections from node x 
-            A[xWireNonHead, nodeX] = A[xCutHead, nodeX]
-            A[xCutHead, nodeX] = 0 
-        end
-    end
-
-    return A
-end
-
-function runDynamicsAdvectionConsensusParallel(AInit, numRewirings, tau)
-    
-    A = copy(AInit)
-    numNodes = size(A, 1)
-    pRandRewire = 0 
-    
-    for i=1:numRewirings
-        notX, nodeX = pickNodeWithInOutEdges(A, tau, pRandRewire)
-        
-        # Identify nodes that do not send an edge to "x
-        xNonTailBool = 1.0 .* .!Bool.(A[nodeX, notX])
-        
-        # find the nodes with no incomings from "x"
-        xNonHeadBool = 1.0 .* .!Bool.(A[notX, nodeX])
-        
-        # ====== REWIRING FOR THE in-DEGREE OF THE NODE X ====
-
-        kernel = computeConsensusKernel(A,tau)
-        
-                    
-        # get node x's coldest tail (excluding "x")
-        xTails = utils.nonzero(A[nodeX, :])[1]
-        xCutTail = xTails[argmin(kernel[nodeX, xTails])]
-            
-        # get node x's hottest non-tail (excluding "x")
-        xNonTails = notX[utils.nonzero(xNonTailBool)[1]]
-        xWireNonTail = xNonTails[argmax(kernel[nodeX, xNonTails])]
-        
-        # ====== REWIRING FOR THE out-DEGREE OF NODE X =====
-        
-        kernel = computeAdvectionKernel(A, tau)
-        
-        # get node x's coldest head (excluding "x")
-        xHeads = utils.nonzero(A[:, nodeX])[1]
-        xCutHead = xHeads[argmin(kernel[xHeads, nodeX])]
-            
-        # Get x's hottest non-head (excluding "x")
-        xNonHeads = notX[utils.nonzero(xNonHeadBool)[1]]
-        xWireNonHead = xNonHeads[argmax(kernel[xNonHeads, nodeX])]
-        
-        ############################
-        # cut and rewire in-going connections from node x
-        A[nodeX, xWireNonTail] = A[nodeX, xCutTail]
-        A[nodeX, xCutTail] = 0 
-        
-        # cut and rewire out-going connections from node x 
-        A[xWireNonHead, nodeX] = A[xCutHead, nodeX]
-        A[xCutHead, nodeX] = 0 
-    end
-
-    return A
-end
-
-# either run advection or consensus depending on pAdv. For example if pAdv = 0.7, every time there is a 70% probability that advection will take place, and a 30% that consensus will take place
-
-function runDynamicsAdvectionConsensus(AInit, numRewirings, tau, pAdv)
-    
-    A = copy(AInit)
-    numNodes = size(A, 1)
-    pRandRewire = 0 
-    
-    for i=1:numRewirings
-        notX, nodeX = pickNodeWithInOutEdges(A, tau, pRandRewire)
-        
-        # Identify nodes that do not send an edge to "x
-        xNonTailBool = 1.0 .* .!Bool.(A[nodeX, notX])
-        
-        # find the nodes with no incomings from "x"
-        xNonHeadBool = 1.0 .* .!Bool.(A[notX, nodeX])
-        
-        if pRandRewire <= rand()
-            println("We do consensus")
-            
-            # ====== REWIRING FOR THE in-DEGREE OF THE NODE X ====
-
-            kernel = computeConsensusKernel(A,tau)
-            
-            # get node x's coldest tail (excluding "x")
-            xTails = utils.nonzero(A[nodeX, :])[1]
-            xCutTail = xTails[argmin(kernel[nodeX, xTails])]
-            
-            # get node x's hottest non-tail (excluding "x")
-            xNonTails = notX[utils.nonzero(xNonTailBool)[1]]
-            xWireNonTail = xNonTails[argmax(kernel[nodeX, xNonTails])]
-            
-            
-            # cut and rewire in-going connections from node x
-            A[nodeX, xWireNonTail] = A[nodeX, xCutTail]
-            A[nodeX, xCutTail] = 0 
-        else 
-            println("We do advection")
-            
-            # ====== REWIRING FOR THE OUT-DEGREE OF NODE X =====
-            
-            kernel = computeAdvectionKernel(A, tau)
-            
-            
-            # get node x's coldest head (excluding "x")
-            xHeads = utils.nonzero(A[:, nodeX])[1]
-            xCutHead = xHeads[argmin(kernel[xHeads, nodeX])]
-            
-            # Get x's hottest non-head (excluding "x")
-            xNonHeads = notX[utils.nonzero(xNonHeadBool)[1]]
-            xWireNonHead = xNonHeads[argmax(kernel[xNonHeads, nodeX])]
-            
-            # cut and rewire out-going connections from node x 
-            A[xWireNonHead, nodeX] = A[xCutHead, nodeX]
-            A[xCutHead, nodeX] = 0 
-        end
-    end
-
-    return A
-end
-
-function runDynamicsAdvectionConsensusWithRandRewire(AInit, numRewirings, tau, pAdv, pRandRewirings)
-    
-    A = copy(AInit)
-    numNodes = size(A, 1)
-    pRandRewire = 0 
-    
-    for i=1:numRewirings
-        notX, nodeX = pickNodeWithInOutEdges(A, tau, pRandRewire)
-        
-        # Identify nodes that do not send an edge to "x
-        xNonTailBool = 1.0 .* .!Bool.(A[nodeX, notX])
-        
-        # find the nodes with no incomings from "x"
-        xNonHeadBool = 1.0 .* .!Bool.(A[notX, nodeX])
-        
-        if pRandRewire <= rand()
-            if pAdv <= rand()
-                println("We do consensus")
-            
-                # ====== REWIRING FOR THE in-DEGREE OF THE NODE X ====
-
-                kernel = computeConsensusKernel(A,tau)
-            
-                # get node x's coldest tail (excluding "x")
-                xTails = utils.nonzero(A[nodeX, :])[1]
-                xCutTail = xTails[argmin(kernel[nodeX, xTails])]
-            
-                # get node x's hottest non-tail (excluding "x")
-                xNonTails = notX[utils.nonzero(xNonTailBool)[1]]
-                xWireNonTail = xNonTails[argmax(kernel[nodeX, xNonTails])]
-            
-            
-                # cut and rewire in-going connections from node x
-                A[nodeX, xWireNonTail] = A[nodeX, xCutTail]
-                A[nodeX, xCutTail] = 0 
-            else
-                println("We do advection")
-                
-                # ====== REWIRING FOR THE OUT-DEGREE OF NODE X =====
-            
-                kernel = computeAdvectionKernel(A, tau)
-            
-            
-                # get node x's coldest head (excluding "x")
-                xHeads = utils.nonzero(A[:, nodeX])[1]
-                xCutHead = xHeads[argmin(kernel[xHeads, nodeX])]
-            
-                # Get x's hottest non-head (excluding "x")
-                xNonHeads = notX[utils.nonzero(xNonHeadBool)[1]]
-                xWireNonHead = xNonHeads[argmax(kernel[xNonHeads, nodeX])]
-            
-                # cut and rewire out-going connections from node x 
-                A[xWireNonHead, nodeX] = A[xCutHead, nodeX]
-                A[xCutHead, nodeX] = 0 
-            end
-                
-                
-        else  # or randomly rewire
-            ####################################
-            # randomly pick one of x's tails (excluding "x")
-            xTails = utils.nonzero(A[nodeX, :])[1]
-            xCutTail = rand(1:xTails)
-            
-            # randomly pick one of x's non-tails (excluding "x")
-            xWireNonTail = notX[rand(utils.nonzero(xNonTailBool)[1])]
-            
-            ##################################
-            # randomly pick one of x's head (excluding "x")
-            xHeads = utils.nonzero(A[:, nodeX])[1]
-            xCutHead = rand(1:xHeads)
-        
-            xWireNonHead = notX[rand(utils.nonzero(xNonHeadBool)[1])]
-            
-            if xCutTail == xWireNonTail || xCutHead == xWireNonHead
-                println("Problem")
-            end
-                
-            A[nodeX, xWireNonTail] = A[nodeX, xCutTail]
-            A[xWireNonHead, nodeX] = A[xCutHead, nodeX]
-    
-
-            A[nodeX, xCutTail] = 0 
-            A[xCutHead, nodeX] = 0 
-        end
-    end
-    return A
-end
-
 end
