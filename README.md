@@ -20,4 +20,3 @@
 ## Usage
 
 Revise automatically updates packages imported with includet() without kernel restart.  
-
