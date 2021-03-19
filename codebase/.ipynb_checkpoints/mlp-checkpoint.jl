@@ -111,14 +111,14 @@ function backprop(w, b, niter, trainidx, testidx, n, ntest, nbatch, layer_dims; 
             w[i] .-= LR *grad(dl,w[i])
             b[i] .-= LR *grad(dl,b[i])
         end
-        
-        A = computeKernel(w,layer_dims)
-        push!(rho, metrics.net_density(A))
+         
         
         if k == 2^t 
             t += 1 
             
-            A = runOutDynamics(A, p, tau)
+            A = computeKernel(w,layer_dims)
+
+            A = runOutDynamics(A, p, tau, rewire = rewire)
            """ A, o, xCutHead, nodeX = pruneOutDegree(A, p, tau)
 
             if rewire == true

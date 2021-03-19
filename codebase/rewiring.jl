@@ -302,10 +302,48 @@ function rewireInDegree(AInit, o, xCutTail, nodeX, pRandRewire)
 end
 
 function runInDynamics(AInit, pRandRewire, tau)
+    
+    A = copy(AInit)
+    numNodes = size(A, 1)
+    
+        
+    notX, nodeX = pickNodeWithInOutEdges(A, tau, pRandRewire)
+
+    # find the nodes with no incomings from "x"
+        
+    xNonTailBool = 1 .* Bool.(A[nodeX, notX] .== 0) 
+        
+    if pRandRewire <= rand()
+        xTails = findall(x -> x != 0, A[nodeX, :])
+        xCutTail = xTails[argmin(A[nodeX, xTails])]
+   
+        # get node x's hottest non-tail (excluding "x")
+        xNonTails = notX[findall(x -> x != 0, xNonTailBool)]
+        xWireNonTail = xNonTails[argmax(A[nodeX, xNonTails])]            
+    else # else we randomly rewire 
+        xTails = findall(x -> x != 0, A[nodeX, :])
+        ind = rand(1:length(xTails))
+        xCutTail = xTails[ind]
+        
+        xNonTailBoolNonzero = findall(x -> x != 0, xNonTailBool)
+        ind = rand(1:length(xNonTailBoolNonzero))
+        xWireNonTail = notX[xNonTailBoolNonzero[ind]]
+    end
+        
+    if xCutTail == xWireNonTail
+        println("PROBLEM")
+        println("The A nodes rewired are $xWireNonTail and $nodeX with weight $A[nodeX, xCutTail]")
+        println("The A nodes disconnected are $xCutTail and $nodeX")
+    end
+    
+    A[xWireNonTail, nodeX] = A[nodeX, xCutTail]
+    A[nodeX, xCutTail] = 0 
+    
+    return A
 end
 
-function runOutDynamics(AInit, pRandRewire, tau)
-    A = copy(AInit)
+function runOutDynamics(AInit, pRandRewire, tau; rewire = true)
+        A = copy(AInit)
         numNodes = size(A, 1)
 
         notX, nodeX = pickNodeWithInOutEdges(A, tau, pRandRewire)
@@ -316,26 +354,27 @@ function runOutDynamics(AInit, pRandRewire, tau)
         if pRandRewire <= rand()
             xHeads = findall(x -> x != 0, A[:, nodeX])
             xCutHead = xHeads[argmin(A[xHeads, nodeX])]
-
-            xNonHeads = notX[findall(x -> x != 0, xNonHeadBool)]
-            xWireNonHead = xNonHeads[argmax(A[xNonHeads, nodeX])]
+            
+            if rewire == true
+                xNonHeads = notX[findall(x -> x != 0, xNonHeadBool)]
+                xWireNonHead = xNonHeads[argmax(A[xNonHeads, nodeX])]
+            end
         else # else we randomly rewire    
             xHeads = findall(x -> x != 0, A[:, nodeX])
             ind = rand(1:length(xHeads))
             xCutHead = xHeads[ind]
-
-            xNonHeadBoolNonzero = findall(x -> x != 0, xNonHeadBool)
-            ind = rand(1:length(xNonHeadBoolNonzero))
-            xWireNonHead = notX[xNonHeadBoolNonzero[ind]]
+            
+            if rewire == true
+                xNonHeadBoolNonzero = findall(x -> x != 0, xNonHeadBool)
+                ind = rand(1:length(xNonHeadBoolNonzero))
+                xWireNonHead = notX[xNonHeadBoolNonzero[ind]]
+            end
         end
-        
-        if xCutHead == xWireNonHead
-            println("PROBLEM")
-            println("The A nodes rewired are $xWireNonHead and $nodeX with weight $A[xCutHead, nodeX]")
-            println("The A nodes disconnected are $xCutHead and $nodeX")
+        if rewire == true
+            println("Rewiring: ($xWireNonHead,$nodeX) with ($xCutHead, $nodeX)")
+            A[xWireNonHead, nodeX] = A[xCutHead, nodeX]
         end
-
-        A[xWireNonHead, nodeX] = A[xCutHead, nodeX]
+        println("Pruning: ($xCutHead, $nodeX)")
         A[xCutHead, nodeX] = 0 
     return A  
 end
