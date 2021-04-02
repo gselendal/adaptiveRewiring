@@ -1,7 +1,7 @@
 module mlp 
 include("./rewiring.jl")
 include("./metrics.jl")
-using Knet, Plots, Statistics, LinearAlgebra, Random,.rewiring, .metrics
+using Knet, Plots, Statistics, LinearAlgebra, Random, .rewiring, .metrics
 export pred, loss, gen_data, split_data, genbatch, backprop
 
 # prediction and loss functions
@@ -138,5 +138,78 @@ function backprop(w, b, niter, trainidx, testidx, n, ntest, nbatch, layer_dims; 
     end
     
     return w, b, losstrn, losstst, rho
+end
+
+function backprop(w, b, niter, trainidx, testidx, n, ntest, nbatch, layer_dims; rewire = false, λ= 0.0, LR = 0.1, p = 0.0)
+    losstrn = [0.0]
+    losstst = [0.0]    
+    losscheck = [0.0]
+    xtrn, ytrn, xtst, ytst = mlp.split_data(trainidx, testidx, n, ntest)
+    rho = []
+    tau = 4.5 
+    
+    for k in progress(1:niter)
+        xin = genbatch(trainidx, n,nbatch, ntest)
+        yin = sum(xin,dims=1).%2
+        dl = @diff loss(w,b,xin,yin; λ= λ)
+        for i=1:length(w)
+            w[i] .-= LR *grad(dl,w[i])
+            b[i] .-= LR *grad(dl,b[i])
+        end
+         
+        if (k%1000==1)
+            xin = genbatch(trainidx, n,ntest, ntest) # training set samples with size equal to test set
+            yin = sum(xin,dims=1).%2 
+            push!(losstrn,loss(w,b,xin,yin; λ= λ)) # record loss over 1000 samples
+            push!(losstst,loss(w,b,xtst,ytst; λ= λ))
+            
+            
+        end
+        
+    end
+    
+    return w, b, losstrn, losstst, losscheck
+end
+
+function backprop_dw(w, b, niter, trainidx, testidx, n, ntest, nbatch, layer_dims; rewire = false, λ= 0.0, LR = 0.1, p = 0.0)
+    losstrn = [0.0]
+    losstst = [0.0]    
+    losscheck = [0.0]
+    xtrn, ytrn, xtst, ytst = mlp.split_data(trainidx, testidx, n, ntest)
+    rho = []
+    tau = 4.5 
+    
+    for k in progress(1:niter)
+        xin = genbatch(trainidx, n,nbatch, ntest)
+        yin = sum(xin,dims=1).%2
+        dl = @diff loss(w,b,xin,yin; λ= λ)
+        for i=1:length(w)
+            w[i] .-= LR *grad(dl,w[i])
+            b[i] .-= LR *grad(dl,b[i])
+        end
+         
+        if (k%1000==1)
+            A = computeKernel(w,layer_dims)
+            A_wired = rewire(A, p, tau)
+            w = computeKernel_reverse(w, A_wired, layer_dims)
+
+            
+            xin = genbatch(trainidx, n,ntest, ntest) # training set samples with size equal to test set
+            yin = sum(xin,dims=1).%2 
+            push!(losstrn,loss(w,b,xin,yin; λ= λ)) # record loss over 1000 samples
+            push!(losstst,loss(w,b,xtst,ytst; λ= λ))
+            
+            if (losscheck[end]-losstrn[end]) < 0 
+                println("Loss increasing")
+                w = computeKernel_reverse(w, A, layer_dims)
+            else
+                push!(losscheck,loss(w,b,xin,yin; λ= λ))
+            end
+            
+        end
+        
+    end
+    
+    return w, b, losstrn, losstst, losscheck
 end
 end
